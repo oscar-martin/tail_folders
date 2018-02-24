@@ -6,14 +6,33 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
-	_ "path/filepath"
+	"os/signal"
+	"path"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strings"
 )
 
-type tailFile struct {
-	folder string
+var (
+	Info          *log.Logger
+	Warning       *log.Logger
+	Error         *log.Logger
+	logFolderName = "./.logdir"
+)
+
+func initLogs(
+	infoHandle io.Writer,
+	warningHandle io.Writer,
+	errorHandle io.Writer) {
+
+	Info = log.New(infoHandle, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	Warning = log.New(warningHandle, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+	Error = log.New(errorHandle, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 type rootFolderWatcher struct {
@@ -22,12 +41,14 @@ type rootFolderWatcher struct {
 	tailProcesses map[string]*os.Process
 	toStdOutChan  chan<- string
 	watcher       *fsnotify.Watcher
+	recursive     bool
+	filterFunc    func(string) bool
 }
 
-func makeRootFolderWatcher(root string, toStdOutChan chan<- string) *rootFolderWatcher {
+func makeRootFolderWatcher(root string, toStdOutChan chan<- string, recursive bool, filterFunc func(string) bool) *rootFolderWatcher {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	watcher.Add(root)
@@ -37,24 +58,68 @@ func makeRootFolderWatcher(root string, toStdOutChan chan<- string) *rootFolderW
 		tailProcesses: make(map[string]*os.Process),
 		toStdOutChan:  toStdOutChan,
 		watcher:       watcher,
+		recursive:     recursive,
+		filterFunc:    filterFunc,
 	}
 }
 
+func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string) {
+	files, err := ioutil.ReadDir(folderPath)
+	if err != nil {
+		log.Fatalf("Error trying to scan folder path '%s': %v", folderPath, err)
+	} else {
+		for _, fileInfo := range files {
+			filename := path.Join(folderPath, fileInfo.Name())
+			if fileInfo.IsDir() && !isHidden(filename) {
+				r.folders[filename] = true
+				r.watcher.Add(filename)
+				Info.Printf("Added watcher on %s\n", filename)
+				if r.recursive {
+					// Try to add any nested folder that could've created...
+					r.scanAndAddSubfolder(filename)
+				}
+			} else {
+				if r.filterFunc(fileInfo.Name()) {
+					Info.Printf("Starting tailing %s\n", fileInfo.Name())
+					process := tail(filename, r.toStdOutChan)
+					if process != nil {
+						r.tailProcesses[filename] = process
+					}
+				}
+			}
+		}
+	}
+}
+
+func (r *rootFolderWatcher) close() {
+	r.watcher.Close()
+	Info.Printf("Watcher on %s closed\n", r.root)
+}
+
 func (r *rootFolderWatcher) watch() {
+	r.scanAndAddSubfolder(r.root)
+
+	// now, run the watcher
 	go func() {
 		for {
 			select {
 			case event := <-r.watcher.Events:
+				Info.Printf("%v \n", event)
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					if stat, err := os.Stat(event.Name); err == nil && stat.IsDir() {
 						r.folders[event.Name] = true
 						r.watcher.Add(event.Name)
-						log.Printf("Added watcher on %s\n", event.Name)
+						Info.Printf("Added watcher on %s\n", event.Name)
+						if r.recursive {
+							r.scanAndAddSubfolder(event.Name)
+						}
 					} else {
-						log.Println("Starting tailing...")
-						process := tail(event.Name, r.toStdOutChan)
-						if process != nil {
-							r.tailProcesses[event.Name] = process
+						if r.filterFunc(path.Base(event.Name)) {
+							Info.Printf("Starting tailing %s\n", event.Name)
+							process := tail(event.Name, r.toStdOutChan)
+							if process != nil {
+								r.tailProcesses[event.Name] = process
+							}
 						}
 					}
 				}
@@ -65,40 +130,99 @@ func (r *rootFolderWatcher) watch() {
 					if isDir {
 						r.watcher.Remove(event.Name)
 						delete(r.folders, event.Name)
-						log.Printf("Removed watcher on %s\n", event.Name)
+						Info.Printf("Removed watcher on %s\n", event.Name)
 					} else {
 						process, exists := r.tailProcesses[event.Name]
 						if exists {
 							err := process.Kill()
 							if err != nil {
-								log.Printf("Forced removing tail process on %s with error %v\n", event.Name, err)
+								Error.Printf("Forced removing tail process on %s with error %v\n", event.Name, err)
 							} else {
-								log.Printf("Forced removing tail process on %s\n", event.Name)
+								Info.Printf("Forced removing tail process on %s\n", event.Name)
 							}
 						}
 					}
 				}
 			case err := <-r.watcher.Errors:
-				log.Println("Error:", err)
+				Error.Println("Error:", err)
 			}
 		}
 	}()
+	Info.Printf("Start watching on %s\n", r.root)
 }
 
 func main() {
-	// TODO: Should I support for multiple root paths as parameters?
-	rootPath := *flag.String("root", ".", "Description")
+	folderPathsStr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED. Defaults to current directory")
+	recursivePtr := flag.Bool("recursive", true, "Whether or not recursive folders should be watched")
+	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'. Defaults to 'glob'")
+	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
+
+	flag.Usage = func() {
+		fmt.Printf("Usage of %s <options>\n", os.Args[0])
+		fmt.Println("")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	var filterFunc func(string) bool
+	switch *expressionTypePtr {
+	case "glob":
+		filterFunc = filterByGlob(*filterPtr)
+	case "regex":
+		filterFunc = filterByRegex(*filterPtr)
+	default:
+		log.Fatalf("Unrecognized filter_by value: %s", *expressionTypePtr)
+	}
+
+	// create the log folder and file. It is inside a hidden folder for avoiding being tracked itself
+	logFolder := path.Join(".", logFolderName)
+	os.MkdirAll(logFolder, os.ModePerm)
+
+	logFileName := path.Join(logFolder, "taillog.log")
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal("Failed to open log file ", logFileName, ":", err)
+	}
+
+	initLogs(logFile, logFile, logFile)
+
+	Info.Println("Arguments in place:")
+	Info.Printf("- folders: %s", *folderPathsStr)
+	Info.Printf("- recursive: %v", *recursivePtr)
+	Info.Printf("- filter_by: %s", *expressionTypePtr)
+	Info.Printf("- filter: %s", *filterPtr)
+
 	stdoutChan := make(chan string)
-
 	go stdoutWriter(stdoutChan)
-	rootFolder := makeRootFolderWatcher(rootPath, stdoutChan)
-	defer rootFolder.watcher.Close()
 
-	rootFolder.watch()
+	for _, folderPath := range strings.Split(*folderPathsStr, ",") {
+		rootFolderWatcher := makeRootFolderWatcher(folderPath, stdoutChan, *recursivePtr, filterFunc)
+		defer rootFolderWatcher.close()
+		rootFolderWatcher.watch()
+	}
 
-	// TODO: Add signal here to support gracefully shutdown
-	done := make(chan bool)
-	<-done
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+}
+
+func filterByGlob(globPattern string) func(string) bool {
+	_, err := filepath.Match(globPattern, "text.txt")
+	if err != nil {
+		log.Fatalf("Globbing Expression is not right: %v", err)
+	}
+
+	return func(filename string) bool {
+		matched, _ := filepath.Match(globPattern, filename)
+		return matched
+	}
+}
+
+func filterByRegex(regexStr string) func(string) bool {
+	regex := regexp.MustCompile(regexStr)
+	return func(filename string) bool {
+		return regex.MatchString(filename)
+	}
 }
 
 func stdoutWriter(c <-chan string) {
@@ -130,21 +254,31 @@ func tail(filename string, toStdOutChan chan<- string) *os.Process {
 	prefixWriter := prefixingWriter(filename, toStdOutChan)
 
 	if stat, err := os.Stat(filename); err == nil && !stat.IsDir() {
-		cmd := exec.Command("tail", "-f", filename)
+		cmd := exec.Command("tail", "-f", "-n", "0", filename)
 		cmd.Stdout = prefixWriter
 		cmd.Stderr = prefixWriter
 		err := cmd.Start()
 		if err != nil {
-			log.Printf("%v\n", err)
+			Error.Printf("%v\n", err)
 		}
 		go func(c *exec.Cmd) {
 			err := cmd.Wait()
 			if err != nil {
-				log.Printf("Error: %v\n", err)
+				Warning.Printf("%s -> %v\n", filename, err)
 			}
 		}(cmd)
 		return cmd.Process
 	}
-	log.Printf("Warning! Trying to tail an non-existing file %s. Skipping.\n", filename)
+	Warning.Printf("Trying to tail an non-existing file %s. Skipping.\n", filename)
 	return nil
+}
+
+func isHidden(filename string) bool {
+	if runtime.GOOS != "windows" {
+		// unix/linux file or directory that starts with . is hidden
+		if filename[0:1] == "." {
+			return true
+		}
+	}
+	return false
 }
