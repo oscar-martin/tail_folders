@@ -1,5 +1,7 @@
 # tail_folders 
 
+[![Build Status](https://travis-ci.org/oscar-martin/tail_folders.svg?branch=master)](https://travis-ci.org/oscar-martin/tail_folders)
+
 This program scans within a list of folders passed in certain log files and tails them on current process' stdout. 
 
 A use case for this tool is to create a docker image with this tool and to put a logging driver plugin on it. By running `tail_folders` as PID 1 in this container, its stdout/stderr will be sent to the desired log system. This way you can easily aggregate log files generated from other containers running on the same host by just creating volumes for folders where the logs are written and to share these volumes with the tail_folders container.
