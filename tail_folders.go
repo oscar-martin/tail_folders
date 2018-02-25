@@ -23,6 +23,8 @@ var (
 	Warning       *log.Logger
 	Error         *log.Logger
 	logFolderName = "./.logdir"
+	appVersion    string
+	rev           string
 )
 
 func initLogs(
@@ -150,11 +152,12 @@ func (r *rootFolderWatcher) watch() {
 
 func main() {
 	// processing command arguments
-	folderPathsPtr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED. Defaults to current directory")
+	folderPathsPtr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED")
 	recursivePtr := flag.Bool("recursive", true, "Whether or not recursive folders should be watched")
-	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'. Defaults to 'glob'")
+	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'")
 	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
 	tagPtr := flag.String("tag", "", "Optional tag to use for each line")
+	versionPtr := flag.Bool("version", false, "Print the version")
 
 	flag.Usage = func() {
 		fmt.Printf("%s - %s", os.Args[0], "Application that scans a list of folders (recursively by default) and tails any file that matches the filename filter\n\n")
@@ -163,6 +166,17 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *versionPtr {
+		if appVersion == "" {
+			appVersion = "development"
+		}
+		if rev == "" {
+			rev = "untracked"
+		}
+		fmt.Printf("%s (Rev: %s)\n", appVersion, rev)
+		os.Exit(0)
+	}
 
 	folderPathsStr := strings.TrimSpace(*folderPathsPtr)
 	expressionTypeStr := strings.TrimSpace(*expressionTypePtr)
