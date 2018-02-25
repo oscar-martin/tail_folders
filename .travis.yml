@@ -24,8 +24,8 @@ deploy:
   api_key:
     secure: t6+wOA3utJ/2Y6Okp0u6k61WdNoxLqjXD6h4vFtQX7wTxBmHxLFOA9Xk21OJJEiK3o2m+y1bAD6Kv8lqNTRRfw0xTliV1R8Aetot1wyA9LzOhttkvGqMOxhVO4ILKiCWNwWGRc1lBMUZPiTFcNGCy19JjpceKH0Ld3WaD6JjUSk03YXo9ATJKMIGDiDgN3hcGGgqbijA9bGUAtbZLKs1ANyG+2KzKW3Ql0s1KKEhX7FrcznwMLDLR+QECHA1KsI/VXj9JC3sL1uQVXnf/b6wEKA8Z3CtKSexXLAwB4GrHOdHPugsiyczeWpeS4WuLx0HmoLPxtQNIlMkuBvO8vHefFQaA2fQEMV5TsVcYTo+OQXEqosDE5g+bYVK+gx13T5qDxH4RE7AElrBiMiZmAQAu/darHI7BtMS9aOi95yOZ7qsCPg1flpHDhxd6FyNdAmv8+i5tSdQD9aGirfTKjTW4qkcw3p+uKa6Uxxzz0dQ7zk/vacToJjRCGj47VtdLGsJNQ5P1YEm9FJn709eYiJnoJPmG2HLfTkNjWzhURPRM3C9XGfP76FY8dp1TDHxDMgoRLaMQBt/eyegQmsGLiimLkUCxPzws1Rbn0Twh4K/MY1WHZPPPmU8A6V+bPnWeh+0qHwssYQEIGP8eKwomJIDHWEqcwlRRWQHnHheEHnpJi8=
   file:
-  - tail_folders_darwin_amd64
-  - tail_folders_linux_amd64
+  - ./tail_folders_darwin_amd64
+  - ./tail_folders_linux_amd64
   on:
     repo: oscar-martin/tail_folders
     tags: true
