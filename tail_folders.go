@@ -70,22 +70,45 @@ func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string) {
 	} else {
 		for _, fileInfo := range files {
 			filename := path.Join(folderPath, fileInfo.Name())
-			if fileInfo.IsDir() && !isHidden(filename) {
-				r.folders[filename] = true
-				r.watcher.Add(filename)
-				Info.Printf("Added watcher on %s\n", filename)
-				if r.recursive {
-					// Try to add any nested folder that could've created...
-					r.scanAndAddSubfolder(filename)
-				}
+			r.processExistingFileInfo(fileInfo, filename)
+		}
+	}
+}
+
+func (r *rootFolderWatcher) processExistingFileInfo(fileInfo os.FileInfo, filename string) {
+	if fileInfo.IsDir() && !isHidden(filename) {
+		r.folders[filename] = true
+		r.watcher.Add(filename)
+		Info.Printf("Added folder '%s' on watcher\n", filename)
+		if r.recursive {
+			// Try to add any nested folder that could've created...
+			r.scanAndAddSubfolder(filename)
+		}
+	} else {
+		if r.filterFunc(fileInfo.Name()) {
+			process := tail(filename, r.toStdOutChan)
+			Info.Printf("Started tailing '%s'\n", fileInfo.Name())
+			if process != nil {
+				r.tailProcesses[filename] = process
+			}
+		}
+	}
+}
+
+func (r *rootFolderWatcher) processDeletedFileOrFolder(name string) {
+	_, isDir := r.folders[name]
+	if isDir {
+		r.watcher.Remove(name)
+		delete(r.folders, name)
+		Info.Printf("Removed tracking of folder '%s' on watcher\n", name)
+	} else {
+		process, exists := r.tailProcesses[name]
+		if exists {
+			err := process.Kill()
+			if err != nil {
+				Error.Printf("Forced removing tail process on '%s' (file is removed) with error %v\n", name, err)
 			} else {
-				if r.filterFunc(fileInfo.Name()) {
-					Info.Printf("Starting tailing %s\n", fileInfo.Name())
-					process := tail(filename, r.toStdOutChan)
-					if process != nil {
-						r.tailProcesses[filename] = process
-					}
-				}
+				Info.Printf("Forced removing tail process on '%s' because file has been removed\n", name)
 			}
 		}
 	}
@@ -93,10 +116,11 @@ func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string) {
 
 func (r *rootFolderWatcher) close() {
 	r.watcher.Close()
-	Info.Printf("Watcher on %s closed\n", r.root)
+	Info.Printf("Watcher on folder '%s' closed\n", r.root)
 }
 
 func (r *rootFolderWatcher) watch() {
+	// scan current folders (whether recursive flag is enabled) and files
 	r.scanAndAddSubfolder(r.root)
 
 	// now, run the watcher
@@ -106,74 +130,93 @@ func (r *rootFolderWatcher) watch() {
 			case event := <-r.watcher.Events:
 				Info.Printf("%v \n", event)
 				if event.Op&fsnotify.Create == fsnotify.Create {
-					if stat, err := os.Stat(event.Name); err == nil && stat.IsDir() {
-						r.folders[event.Name] = true
-						r.watcher.Add(event.Name)
-						Info.Printf("Added watcher on %s\n", event.Name)
-						if r.recursive {
-							r.scanAndAddSubfolder(event.Name)
-						}
+					fileInfo, err := os.Stat(event.Name)
+					if err != nil {
+						Error.Printf("Unable to stat file '%s': %v", event.Name, err)
 					} else {
-						if r.filterFunc(path.Base(event.Name)) {
-							Info.Printf("Starting tailing %s\n", event.Name)
-							process := tail(event.Name, r.toStdOutChan)
-							if process != nil {
-								r.tailProcesses[event.Name] = process
-							}
-						}
+						filename := fileInfo.Name()
+						r.processExistingFileInfo(fileInfo, filename)
 					}
-				}
-				// here we need to keep track of created folders and files in order to be able to know
-				// if the removed file was actually a folder or a file
-				if event.Op&fsnotify.Remove == fsnotify.Remove {
-					_, isDir := r.folders[event.Name]
-					if isDir {
-						r.watcher.Remove(event.Name)
-						delete(r.folders, event.Name)
-						Info.Printf("Removed watcher on %s\n", event.Name)
-					} else {
-						process, exists := r.tailProcesses[event.Name]
-						if exists {
-							err := process.Kill()
-							if err != nil {
-								Error.Printf("Forced removing tail process on %s with error %v\n", event.Name, err)
-							} else {
-								Info.Printf("Forced removing tail process on %s\n", event.Name)
-							}
-						}
-					}
+				} else if event.Op&fsnotify.Remove == fsnotify.Remove {
+					r.processDeletedFileOrFolder(event.Name)
 				}
 			case err := <-r.watcher.Errors:
 				Error.Println("Error:", err)
 			}
 		}
 	}()
-	Info.Printf("Start watching on %s\n", r.root)
+	Info.Printf("Start watching on folder '%s'\n", r.root)
 }
 
 func main() {
-	folderPathsStr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED. Defaults to current directory")
+	// processing command arguments
+	folderPathsPtr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED. Defaults to current directory")
 	recursivePtr := flag.Bool("recursive", true, "Whether or not recursive folders should be watched")
 	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'. Defaults to 'glob'")
 	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
+	tagPtr := flag.String("tag", "", "Optional tag to use for each line")
 
 	flag.Usage = func() {
+		fmt.Printf("%s - %s", os.Args[0], "Application that scans a list of folders (recursively by default) and tails any file that matches the filename filter\n\n")
 		fmt.Printf("Usage of %s <options>\n", os.Args[0])
 		fmt.Println("")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
-	var filterFunc func(string) bool
-	switch *expressionTypePtr {
-	case "glob":
-		filterFunc = filterByGlob(*filterPtr)
-	case "regex":
-		filterFunc = filterByRegex(*filterPtr)
-	default:
-		log.Fatalf("Unrecognized filter_by value: %s", *expressionTypePtr)
+	folderPathsStr := strings.TrimSpace(*folderPathsPtr)
+	expressionTypeStr := strings.TrimSpace(*expressionTypePtr)
+	filterStr := strings.TrimSpace(*filterPtr)
+	tagStr := strings.TrimSpace(*tagPtr)
+
+	// create filename filter
+	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
+	if err != nil {
+		log.Fatalf("Unrecognized filter_by value: %s", expressionTypeStr)
 	}
 
+	// initialize loggers
+	logFile := createLogFile()
+	initLogs(logFile, logFile, logFile)
+
+	Info.Println("Arguments in place:")
+	Info.Printf("- folders: %s", folderPathsStr)
+	Info.Printf("- recursive: %v", *recursivePtr)
+	Info.Printf("- filter_by: %s", expressionTypeStr)
+	Info.Printf("- filter: %s", filterStr)
+	Info.Printf("- tag: %s", strings.TrimSpace(tagStr))
+
+	// init program
+	stdoutChan := make(chan string)
+	go stdoutWriter(stdoutChan, tagStr)
+
+	for _, folderPath := range strings.Split(folderPathsStr, ",") {
+		rootFolderWatcher := makeRootFolderWatcher(folderPath, stdoutChan, *recursivePtr, filterFunc)
+		defer rootFolderWatcher.close()
+		rootFolderWatcher.watch()
+	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
+	// block here until signal is received
+	<-stop
+}
+
+func createFilterFunc(expressionTypeStr string, filterStr string) (func(string) bool, error) {
+	var filterFunc func(string) bool
+	switch expressionTypeStr {
+	case "glob":
+		filterFunc = filterByGlob(filterStr)
+	case "regex":
+		filterFunc = filterByRegex(filterStr)
+	default:
+		return nil, fmt.Errorf("Unrecognized filter_by value: %s", expressionTypeStr)
+	}
+	return filterFunc, nil
+}
+
+func createLogFile() *os.File {
 	// create the log folder and file. It is inside a hidden folder for avoiding being tracked itself
 	logFolder := path.Join(".", logFolderName)
 	os.MkdirAll(logFolder, os.ModePerm)
@@ -183,33 +226,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to open log file ", logFileName, ":", err)
 	}
-
-	initLogs(logFile, logFile, logFile)
-
-	Info.Println("Arguments in place:")
-	Info.Printf("- folders: %s", *folderPathsStr)
-	Info.Printf("- recursive: %v", *recursivePtr)
-	Info.Printf("- filter_by: %s", *expressionTypePtr)
-	Info.Printf("- filter: %s", *filterPtr)
-
-	stdoutChan := make(chan string)
-	go stdoutWriter(stdoutChan)
-
-	for _, folderPath := range strings.Split(*folderPathsStr, ",") {
-		rootFolderWatcher := makeRootFolderWatcher(folderPath, stdoutChan, *recursivePtr, filterFunc)
-		defer rootFolderWatcher.close()
-		rootFolderWatcher.watch()
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
+	return logFile
 }
 
 func filterByGlob(globPattern string) func(string) bool {
 	_, err := filepath.Match(globPattern, "text.txt")
 	if err != nil {
-		log.Fatalf("Globbing Expression is not right: %v", err)
+		log.Fatalf("Globbing Expression '%s' is not right: %v", globPattern, err)
 	}
 
 	return func(filename string) bool {
@@ -225,12 +248,16 @@ func filterByRegex(regexStr string) func(string) bool {
 	}
 }
 
-func stdoutWriter(c <-chan string) {
+func stdoutWriter(c <-chan string, tag string) {
 	for {
 		select {
 		case logMsg := <-c:
 			// actual write to stdout
-			fmt.Print(logMsg)
+			if tag == "" {
+				fmt.Print(logMsg)
+			} else {
+				fmt.Printf("[%s] %s", tag, logMsg)
+			}
 		}
 	}
 }
