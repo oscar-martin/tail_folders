@@ -16,13 +16,16 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 )
 
 var (
 	Info          *log.Logger
 	Warning       *log.Logger
 	Error         *log.Logger
+	ProcessLog    *log.Logger
 	logFolderName = "./.logdir"
+	exitCode      = 0
 	appVersion    string
 	rev           string
 )
@@ -30,10 +33,12 @@ var (
 func initLogs(
 	infoHandle io.Writer,
 	warningHandle io.Writer,
+	processHandle io.Writer,
 	errorHandle io.Writer) {
 
 	Info = log.New(infoHandle, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	Warning = log.New(warningHandle, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+	ProcessLog = log.New(processHandle, "PROC: ", log.Ldate|log.Ltime)
+	Warning = log.New(warningHandle, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
 	Error = log.New(errorHandle, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
@@ -130,7 +135,7 @@ func (r *rootFolderWatcher) watch() {
 		for {
 			select {
 			case event := <-r.watcher.Events:
-				Info.Printf("%v \n", event)
+				// Info.Printf("%v \n", event)
 				if event.Op&fsnotify.Create == fsnotify.Create {
 					fileInfo, err := os.Stat(event.Name)
 					if err != nil {
@@ -150,7 +155,16 @@ func (r *rootFolderWatcher) watch() {
 	Info.Printf("Start watching on folder '%s'\n", r.root)
 }
 
+// func getExitCode() int {
+// 	return exitCode
+// }
+
 func main() {
+	// exit code could depend on the process exit code
+	defer func() {
+		os.Exit(exitCode)
+	}()
+
 	// processing command arguments
 	folderPathsPtr := flag.String("folders", ".", "Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED")
 	recursivePtr := flag.Bool("recursive", true, "Whether or not recursive folders should be watched")
@@ -161,7 +175,7 @@ func main() {
 
 	flag.Usage = func() {
 		fmt.Printf("%s - %s", os.Args[0], "Application that scans a list of folders (recursively by default) and tails any file that matches the filename filter\n\n")
-		fmt.Printf("Usage of %s <options>\n", os.Args[0])
+		fmt.Printf("Usage of %s <options> [-- command args]:\n", os.Args[0])
 		fmt.Println("")
 		flag.PrintDefaults()
 	}
@@ -191,7 +205,7 @@ func main() {
 
 	// initialize loggers
 	logFile := createLogFile()
-	initLogs(logFile, logFile, logFile)
+	initLogs(logFile, logFile, logFile, logFile)
 
 	Info.Println("Arguments in place:")
 	Info.Printf("- folders: %s", folderPathsStr)
@@ -199,6 +213,9 @@ func main() {
 	Info.Printf("- filter_by: %s", expressionTypeStr)
 	Info.Printf("- filter: %s", filterStr)
 	Info.Printf("- tag: %s", strings.TrimSpace(tagStr))
+	if flag.NArg() > 0 {
+		Info.Printf("- command: %v", flag.Args())
+	}
 
 	// init program
 	stdoutChan := make(chan string)
@@ -210,11 +227,20 @@ func main() {
 		rootFolderWatcher.watch()
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	// if num arguments is greater than one, means that it is a command that should be started
+	if flag.NArg() > 0 {
+		commandName := flag.Args()[0]
+		args := flag.Args()[1:]
+		Info.Printf("Executing command '%s %s'...", commandName, strings.Join(args, " "))
+		exitCode = executeCommand(commandName, args)
+	} else {
+		// I need to block the program waiting for a signal to come for finishing this process
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
-	// block here until signal is received
-	<-stop
+		// block here until signal is received
+		<-stop
+	}
 }
 
 func createFilterFunc(expressionTypeStr string, filterStr string) (func(string) bool, error) {
@@ -322,4 +348,49 @@ func isHidden(filename string) bool {
 		}
 	}
 	return false
+}
+
+type logWriter struct {
+	logger *log.Logger
+}
+
+func newLogWriter(l *log.Logger) *logWriter {
+	lw := &logWriter{}
+	lw.logger = l
+	return lw
+}
+
+func (lw logWriter) Write(p []byte) (n int, err error) {
+	lw.logger.Printf("%s", p)
+	return len(p), nil
+}
+
+func executeCommand(command string, args []string) int {
+	processLogWriter := newLogWriter(ProcessLog)
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdout = processLogWriter
+	cmd.Stderr = processLogWriter
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Start process '%s' had an error: %v", command, err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			// The program has exited with an exit code != 0
+
+			// This works on both Unix and Windows. Although package
+			// syscall is generally platform dependent, WaitStatus is
+			// defined for both Unix and Windows and in both cases has
+			// an ExitStatus() method with the same signature.
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				return status.ExitStatus()
+			}
+		} else {
+			log.Fatalf("Wait for command '%s' had an error: %v", command, err)
+			return -2
+		}
+	}
+	return 0
 }
