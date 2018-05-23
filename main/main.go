@@ -10,10 +10,11 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
-	"tail_folders/command"
-	"tail_folders/logger"
-	"tail_folders/tail"
-	"tail_folders/watcher"
+
+	"github.com/oscar-martin/tail_folders/command"
+	"github.com/oscar-martin/tail_folders/logger"
+	"github.com/oscar-martin/tail_folders/tail"
+	"github.com/oscar-martin/tail_folders/watcher"
 )
 
 var (

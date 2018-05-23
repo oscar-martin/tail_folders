@@ -6,8 +6,9 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"tail_folders/logger"
-	"tail_folders/tail"
+
+	"github.com/oscar-martin/tail_folders/logger"
+	"github.com/oscar-martin/tail_folders/tail"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -22,6 +23,7 @@ type rootFolderWatcher struct {
 	filterFunc    func(string) bool
 }
 
+// MakeRootFolderWatcher lets you create a rootFolderWatcher instance
 func MakeRootFolderWatcher(root string, toStdOutChan chan<- string, recursive bool, filterFunc func(string) bool) *rootFolderWatcher {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

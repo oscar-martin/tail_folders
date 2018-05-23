@@ -4,7 +4,8 @@ import (
 	"log"
 	"os/exec"
 	"syscall"
-	"tail_folders/logger"
+
+	"github.com/oscar-martin/tail_folders/logger"
 )
 
 type logWriter struct {

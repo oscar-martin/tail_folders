@@ -6,7 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"tail_folders/logger"
+
+	"github.com/oscar-martin/tail_folders/logger"
 )
 
 func prefixingWriter(tag string, toStdOutChan chan<- string) io.Writer {
