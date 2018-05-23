@@ -260,11 +260,11 @@ func ExampleTailOnTwoFiles() {
 	// [/tmp/file1.txt] temporary file's content
 }
 
-func ExampleCommandToScope() {
-	run("/tmp", "glob", "hola.log", "", false, []string{"../app.sh"})
-
-	// Output:
-	// [/tmp/hola.log] aaaa
-	// [/tmp/hola.log] aaaa
-	// [/tmp/hola.log] aaaa
-}
+//func ExampleCommandToScope() {
+//	run("/tmp", "glob", "hola.log", "", false, []string{"../app.sh"})
+//
+//	// Output:
+//	// [/tmp/hola.log] aaaa
+//	// [/tmp/hola.log] aaaa
+//	// [/tmp/hola.log] aaaa
+//}
