@@ -66,7 +66,7 @@ func closeFile(file *os.File) {
 }
 
 // Write into a log file. The output should see what is written
-func ExampleRun_tailOnSingleFile() {
+func Example_tailOnSingleFile() {
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
 	defer os.Remove(tmpfile.Name()) // clean up
@@ -88,7 +88,7 @@ func ExampleRun_tailOnSingleFile() {
 }
 
 // Write into a log file. The output should see what is written with a tag
-func ExampleRun_tailOnSingleFileWithTag() {
+func Example_tailOnSingleFileWithTag() {
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
 	defer os.Remove(tmpfile.Name()) // clean up
@@ -111,7 +111,7 @@ func ExampleRun_tailOnSingleFileWithTag() {
 
 // Write into a txt file and a log file. The output should only see what is
 // written into the log file. Filter based on glob pattern
-func ExampleRun_tailOnSingleFileWithGlobFilterExecution() {
+func Example_tailOnSingleFileWithGlobFilterExecution() {
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
 	defer os.Remove(tmpfile.Name()) // clean up
@@ -140,7 +140,7 @@ func ExampleRun_tailOnSingleFileWithGlobFilterExecution() {
 
 // Write into two log files, one of them in a nested folder. The output should only see what is
 // written into the log file from the non-nested folder. Filter based on glob pattern
-func ExampleRun_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
+func Example_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
 	os.MkdirAll("/tmp/tail_folder_test", os.ModePerm)
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
@@ -170,7 +170,7 @@ func ExampleRun_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
 
 // Write into two log files, one of them in a nested folder. The output should only see what is
 // written into the log file from the both folders. Filter based on glob pattern
-func ExampleRun_tailOnRecursiveSingleFileWithGlobFilterExecution() {
+func Example_tailOnRecursiveSingleFileWithGlobFilterExecution() {
 	os.MkdirAll("/tmp/tail_folder_test", os.ModePerm)
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
@@ -202,7 +202,7 @@ func ExampleRun_tailOnRecursiveSingleFileWithGlobFilterExecution() {
 
 // Write into a txt file and a log file. The output should only see what is
 // written into the log file. Filter based on regex pattern
-func ExampleRun_tailOnSingleFileWithRegexFilterExecution() {
+func Example_tailOnSingleFileWithRegexFilterExecution() {
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
 	defer os.Remove(tmpfile.Name()) // clean up
@@ -231,7 +231,7 @@ func ExampleRun_tailOnSingleFileWithRegexFilterExecution() {
 
 // Write into a txt file and a log file. The output should only see what is
 // written into the log file. Filter based on glob pattern
-func ExampleRun_tailOnTwoFiles() {
+func Example_tailOnTwoFiles() {
 	path := "/tmp/file1.log"
 	tmpfile := createFile(path)
 	defer os.Remove(tmpfile.Name()) // clean up
