@@ -13,7 +13,7 @@ const (
 	Tag = "aTag"
 )
 
-func ExamplePrefixingWriter() {
+func Example() {
 	chanOut := make(chan string)
 
 	writer := prefixingWriter(Tag, chanOut)

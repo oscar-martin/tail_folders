@@ -2,7 +2,7 @@ package tail
 
 import "time"
 
-func ExampleStdoutWriterWithoutTag() {
+func ExampleStdoutWriter_withoutTag() {
 	c := make(chan string)
 	go StdoutWriter(c, "")
 	c <- "One\n"
@@ -13,7 +13,7 @@ func ExampleStdoutWriterWithoutTag() {
 	// Two
 }
 
-func ExampleStdoutWriterWithTag() {
+func ExampleStdoutWriter_withTag() {
 	c := make(chan string)
 	go StdoutWriter(c, "aTag")
 	c <- "One\n"
