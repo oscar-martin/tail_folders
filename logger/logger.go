@@ -2,19 +2,21 @@ package logger
 
 import (
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
 )
 
 var (
-	Info          *log.Logger
-	Warning       *log.Logger
-	Error         *log.Logger
-	ProcessLog    *log.Logger
+	Info          = log.New(ioutil.Discard, "", log.Lshortfile)
+	ProcessLog    = log.New(ioutil.Discard, "", log.Lshortfile)
+	Warning       = log.New(ioutil.Discard, "", log.Lshortfile)
+	Error         = log.New(ioutil.Discard, "", log.Lshortfile)
 	logFolderName = "./.logdir"
 )
 
+// InitLogs allows customization for loggers
 func InitLogs(
 	infoHandle io.Writer,
 	warningHandle io.Writer,

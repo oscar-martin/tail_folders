@@ -1,7 +1,6 @@
 package watcher
 
 import (
-	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"log"
 	"os"
@@ -9,6 +8,8 @@ import (
 	"runtime"
 	"tail_folders/logger"
 	"tail_folders/tail"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 type rootFolderWatcher struct {
@@ -52,7 +53,7 @@ func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string) {
 }
 
 func (r *rootFolderWatcher) processExistingFileInfo(fileInfo os.FileInfo, filename string) {
-	if fileInfo.IsDir() && !isHidden(filename) {
+	if fileInfo.IsDir() && !isHidden(filename) && r.recursive {
 		r.folders[filename] = true
 		r.watcher.Add(filename)
 		logger.Info.Printf("Added folder '%s' on watcher\n", filename)
@@ -117,7 +118,9 @@ func (r *rootFolderWatcher) Watch() {
 					r.processDeletedFileOrFolder(event.Name)
 				}
 			case err := <-r.watcher.Errors:
-				logger.Error.Println("Error:", err)
+				if err != nil {
+					logger.Error.Printf("Error: %v\n", err)
+				}
 			}
 		}
 	}()

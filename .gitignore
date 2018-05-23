@@ -22,3 +22,7 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# log and vscode Folders
+.logdir
+.vscode

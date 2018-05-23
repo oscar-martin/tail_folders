@@ -17,7 +17,7 @@ func prefixingWriter(tag string, toStdOutChan chan<- string) io.Writer {
 
 	go func() {
 		for scanner.Scan() {
-			toStdOutChan <- fmt.Sprintf("[%s] %s \n", tag, scanner.Bytes())
+			toStdOutChan <- fmt.Sprintf("[%s] %s\n", tag, scanner.Bytes())
 		}
 	}()
 

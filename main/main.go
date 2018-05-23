@@ -37,7 +37,7 @@ func main() {
 	versionPtr := flag.Bool("version", false, "Print the version")
 
 	flag.Usage = func() {
-		fmt.Printf("%s - %s", os.Args[0], "Application that scans a list of folders (recursively by default) and logger. any file that matches the filename filter\n\n")
+		fmt.Printf("%s - %s", os.Args[0], "Application that scans a list of folders (recursively by default) and tails any file that matches the filename filter\n\n")
 		fmt.Printf("Usage of %s <options> [-- command args]:\n", os.Args[0])
 		fmt.Println("")
 		flag.PrintDefaults()
@@ -60,12 +60,6 @@ func main() {
 	filterStr := strings.TrimSpace(*filterPtr)
 	tagStr := strings.TrimSpace(*tagPtr)
 
-	// create filename filter
-	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
-	if err != nil {
-		log.Fatalf("Unrecognized filter_by value: %s", expressionTypeStr)
-	}
-
 	// initialize loggers
 	logFile := logger.CreateLogFile()
 	logger.InitLogs(logFile, logFile, logFile, logFile)
@@ -80,20 +74,31 @@ func main() {
 		logger.Info.Printf("- command: %v", flag.Args())
 	}
 
+	// run program
+	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args())
+}
+
+func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string) {
+	// create filename filter
+	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
+	if err != nil {
+		log.Fatalf("Unrecognized filter_by value: %s", expressionTypeStr)
+	}
+
 	// init program
 	stdoutChan := make(chan string)
 	go tail.StdoutWriter(stdoutChan, tagStr)
 
 	for _, folderPath := range strings.Split(folderPathsStr, ",") {
-		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, *recursivePtr, filterFunc)
+		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc)
 		defer rootFolderWatcher.Close()
 		rootFolderWatcher.Watch()
 	}
 
 	// if num arguments is greater than one, means that it is a command that should be started
-	if flag.NArg() > 0 {
-		commandName := flag.Args()[0]
-		args := flag.Args()[1:]
+	if len(commandAndArguments) > 0 {
+		commandName := commandAndArguments[0]
+		args := commandAndArguments[1:]
 		logger.Info.Printf("Executing command '%s %s'...", commandName, strings.Join(args, " "))
 		exitCode = command.ExecuteCommand(commandName, args)
 	} else {
