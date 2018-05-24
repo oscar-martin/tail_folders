@@ -38,7 +38,7 @@ func isError(err error) bool {
 	return (err != nil)
 }
 
-func createFile(path string) *os.File {
+func createFile(path string) (*os.File, func()) {
 	// detect if file exists
 	_, err := os.Stat(path)
 
@@ -48,7 +48,10 @@ func createFile(path string) *os.File {
 		if err != nil {
 			panic(err)
 		}
-		return file
+		return file, func() {
+			closeFile(file)
+			os.Remove(file.Name())
+		}
 	}
 	panic(fmt.Sprintf("File %s already exists", path))
 }
@@ -68,8 +71,7 @@ func closeFile(file *os.File) {
 // Write into a log file. The output should see what is written
 func Example_tailOnSingleFile() {
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc := createFile(path)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -81,7 +83,7 @@ func Example_tailOnSingleFile() {
 
 	<-exit
 
-	closeFile(tmpfile)
+	defer closeFunc()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
@@ -90,8 +92,7 @@ func Example_tailOnSingleFile() {
 // Write into a log file. The output should see what is written with a tag
 func Example_tailOnSingleFileWithTag() {
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc := createFile(path)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -103,7 +104,7 @@ func Example_tailOnSingleFileWithTag() {
 
 	<-exit
 
-	closeFile(tmpfile)
+	defer closeFunc()
 
 	// Output:
 	// [aTag] [/tmp/file1.log] temporary file's content
@@ -113,12 +114,10 @@ func Example_tailOnSingleFileWithTag() {
 // written into the log file. Filter based on glob pattern
 func Example_tailOnSingleFileWithGlobFilterExecution() {
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc1 := createFile(path)
 
 	pathTxt := "/tmp/file1.txt"
-	tmpfileTxt := createFile(pathTxt)
-	defer os.Remove(tmpfileTxt.Name()) // clean up
+	tmpfileTxt, closeFunc2 := createFile(pathTxt)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -131,8 +130,8 @@ func Example_tailOnSingleFileWithGlobFilterExecution() {
 
 	<-exit
 
-	closeFile(tmpfile)
-	closeFile(tmpfileTxt)
+	defer closeFunc1()
+	defer closeFunc2()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
@@ -143,12 +142,10 @@ func Example_tailOnSingleFileWithGlobFilterExecution() {
 func Example_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
 	os.MkdirAll("/tmp/tail_folder_test", os.ModePerm)
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc1 := createFile(path)
 
 	pathInnerFolder := "/tmp/tail_folder_test/file1.log"
-	tmpfileInner := createFile(pathInnerFolder)
-	defer os.Remove(tmpfileInner.Name()) // clean up
+	tmpfileInner, closeFunc2 := createFile(pathInnerFolder)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -161,8 +158,8 @@ func Example_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
 
 	<-exit
 
-	closeFile(tmpfile)
-	closeFile(tmpfileInner)
+	defer closeFunc1()
+	defer closeFunc2()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
@@ -173,12 +170,10 @@ func Example_tailOnNonRecursiveSingleFileWithGlobFilterExecution() {
 func Example_tailOnRecursiveSingleFileWithGlobFilterExecution() {
 	os.MkdirAll("/tmp/tail_folder_test", os.ModePerm)
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc1 := createFile(path)
 
 	pathInnerFolder := "/tmp/tail_folder_test/file1.log"
-	tmpfileInner := createFile(pathInnerFolder)
-	defer os.Remove(tmpfileInner.Name()) // clean up
+	tmpfileInner, closeFunc2 := createFile(pathInnerFolder)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -192,8 +187,8 @@ func Example_tailOnRecursiveSingleFileWithGlobFilterExecution() {
 
 	<-exit
 
-	closeFile(tmpfile)
-	closeFile(tmpfileInner)
+	defer closeFunc1()
+	defer closeFunc2()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
@@ -204,12 +199,10 @@ func Example_tailOnRecursiveSingleFileWithGlobFilterExecution() {
 // written into the log file. Filter based on regex pattern
 func Example_tailOnSingleFileWithRegexFilterExecution() {
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc1 := createFile(path)
 
 	pathTxt := "/tmp/file1.txt"
-	tmpfileTxt := createFile(pathTxt)
-	defer os.Remove(tmpfileTxt.Name()) // clean up
+	tmpfileTxt, closeFunc2 := createFile(pathTxt)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -222,8 +215,8 @@ func Example_tailOnSingleFileWithRegexFilterExecution() {
 
 	<-exit
 
-	closeFile(tmpfile)
-	closeFile(tmpfileTxt)
+	defer closeFunc1()
+	defer closeFunc2()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
@@ -233,12 +226,10 @@ func Example_tailOnSingleFileWithRegexFilterExecution() {
 // written into the log file. Filter based on glob pattern
 func Example_tailOnTwoFiles() {
 	path := "/tmp/file1.log"
-	tmpfile := createFile(path)
-	defer os.Remove(tmpfile.Name()) // clean up
+	tmpfile, closeFunc1 := createFile(path)
 
 	pathTxt := "/tmp/file1.txt"
-	tmpfileTxt := createFile(pathTxt)
-	defer os.Remove(tmpfileTxt.Name()) // clean up
+	tmpfileTxt, closeFunc2 := createFile(pathTxt)
 
 	sendInterruptToMyselfAfter(200 * time.Millisecond)
 
@@ -252,8 +243,8 @@ func Example_tailOnTwoFiles() {
 
 	<-exit
 
-	closeFile(tmpfile)
-	closeFile(tmpfileTxt)
+	defer closeFunc1()
+	defer closeFunc2()
 
 	// Output:
 	// [/tmp/file1.log] temporary file's content
