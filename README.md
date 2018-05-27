@@ -59,8 +59,8 @@ And the stdout of `tail_folders` should be similar to:
 This sample assumes the process will write its log into current folder and the log file will have the .log extension. If it is not the case, please use the parameters to tweak the configuration.
 
 ```
-./tail_folders -recursive=false -- ./app.sh
-[test.log] aaaa
-[test.log] aaaa
-[test.log] aaaa
+./tail_folders -folders /tmp -recursive=false -- ./app.sh
+[/tmp/test.log] aaaa
+[/tmp/test.log] aaaa
+[/tmp/test.log] aaaa
 ```
