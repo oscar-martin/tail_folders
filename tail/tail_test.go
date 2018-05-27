@@ -24,15 +24,19 @@ func Example() {
 	}()
 
 	time.Sleep(10 * time.Millisecond)
+	exitChan := make(chan struct{})
 	go func() {
 		for {
 			select {
 			case str := <-chanOut:
 				fmt.Print(str)
+			case <-exitChan:
+				return
 			}
 		}
 	}()
 	time.Sleep(100 * time.Millisecond)
+	exitChan <- struct{}{}
 	// Output:
 	// [aTag] One
 	// [aTag] Two
