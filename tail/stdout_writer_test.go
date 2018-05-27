@@ -1,25 +1,32 @@
 package tail
 
-import "time"
+import (
+	"testing"
+	"time"
+)
 
-func ExampleStdoutWriter_withoutTag() {
+func TestStdoutWriterWithoutTag(t *testing.T) {
 	c := make(chan string)
-	go StdoutWriter(c, "")
+	outWriter := MakeOutStringWriter()
+	go outWriter.Start(c, "")
 	c <- "One\n"
 	c <- "Two\n"
 	time.Sleep(100 * time.Millisecond)
-	// Output:
-	// One
-	// Two
+
+	if outWriter.String() != "One\nTwo\n" {
+		t.Fail()
+	}
 }
 
-func ExampleStdoutWriter_withTag() {
+func TestStdoutWriterWithTag(t *testing.T) {
 	c := make(chan string)
-	go StdoutWriter(c, "aTag")
+	outWriter := MakeOutStringWriter()
+	go outWriter.Start(c, "aTag")
 	c <- "One\n"
 	c <- "Two\n"
 	time.Sleep(100 * time.Millisecond)
-	// Output:
-	// [aTag] One
-	// [aTag] Two
+
+	if outWriter.String() != "[aTag] One\n[aTag] Two\n" {
+		t.Fail()
+	}
 }

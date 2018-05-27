@@ -76,10 +76,11 @@ func main() {
 	}
 
 	// run program
-	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args())
+	outWriter := tail.MakeStdOutWriter()
+	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args(), outWriter)
 }
 
-func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string) {
+func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string, ow *tail.OutWriter) {
 	// create filename filter
 	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
 	if err != nil {
@@ -88,7 +89,7 @@ func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive 
 
 	// init program
 	stdoutChan := make(chan string)
-	go tail.StdoutWriter(stdoutChan, tagStr)
+	go ow.Start(stdoutChan, tagStr)
 
 	for _, folderPath := range strings.Split(folderPathsStr, ",") {
 		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc)
