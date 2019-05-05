@@ -196,7 +196,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	pathInnerFolder := fmt.Sprintf("%s/file1.log", folderName)
 	tmpfileInner, closeFunc2 := createFile(pathInnerFolder)
 
-	sendInterruptToMyselfAfter(200 * time.Millisecond)
+	sendInterruptToMyselfAfter(300 * time.Millisecond)
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
@@ -204,7 +204,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	writeInFile(tmpfileInner, "temporary file's content\n")
 
 	<-exit
