@@ -1,11 +1,13 @@
 package tail
 
-import "fmt"
-import "time"
-import "testing"
-import "io/ioutil"
-import "os"
-import "strings"
+import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"reflect"
+	"testing"
+	"time"
+)
 
 const (
 	One = "One\n"
@@ -14,9 +16,9 @@ const (
 )
 
 func Example() {
-	chanOut := make(chan string)
+	chanOut := make(chan Entry)
 
-	writer := prefixingWriter(Tag, chanOut)
+	writer, _ := lineProcessorWriter(Tag, chanOut)
 
 	go func() {
 		writer.Write([]byte(One))
@@ -28,8 +30,8 @@ func Example() {
 	go func() {
 		for {
 			select {
-			case str := <-chanOut:
-				fmt.Print(str)
+			case e := <-chanOut:
+				fmt.Println(e.Message)
 			case <-exitChan:
 				return
 			}
@@ -38,8 +40,8 @@ func Example() {
 	time.Sleep(100 * time.Millisecond)
 	exitChan <- struct{}{}
 	// Output:
-	// [aTag] One
-	// [aTag] Two
+	// One
+	// Two
 }
 
 func TestDoTail(t *testing.T) {
@@ -51,8 +53,8 @@ func TestDoTail(t *testing.T) {
 
 	defer os.Remove(tmpfile.Name()) // clean up
 
-	chanOut := make(chan string)
-	tailProcess := DoTail(tmpfile.Name(), chanOut)
+	chanOut := make(chan Entry)
+	tailProcess, _ := DoTail(tmpfile.Name(), chanOut)
 
 	time.Sleep(100 * time.Millisecond)
 	if _, err := tmpfile.Write(content); err != nil {
@@ -64,9 +66,10 @@ func TestDoTail(t *testing.T) {
 	if err := tmpfile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	expectedContent := fmt.Sprintf("[%s] %s", tmpfile.Name(), content)
-	if strings.Compare(readContent, string(expectedContent)) != 0 {
-		t.Error("Expected content is not received")
+	expectedContent := Entry{Message: string(content), File: tmpfile.Name()} // fmt.Sprintf("[%s] %s", tmpfile.Name(), content)
+	if !reflect.DeepEqual(readContent.File, expectedContent.File) &&
+		!reflect.DeepEqual(readContent.Message, expectedContent.Message) {
+		t.Errorf("Found content %v is not expected; wanted %v", readContent, expectedContent)
 	}
 
 	if err := tailProcess.Kill(); err != nil {

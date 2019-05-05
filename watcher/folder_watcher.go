@@ -17,14 +17,14 @@ type rootFolderWatcher struct {
 	root          string
 	folders       map[string]bool
 	tailProcesses map[string]*os.Process
-	toStdOutChan  chan<- string
+	toStdOutChan  chan<- tail.Entry
 	watcher       *fsnotify.Watcher
 	recursive     bool
 	filterFunc    func(string) bool
 }
 
 // MakeRootFolderWatcher lets you create a rootFolderWatcher instance
-func MakeRootFolderWatcher(root string, toStdOutChan chan<- string, recursive bool, filterFunc func(string) bool) *rootFolderWatcher {
+func MakeRootFolderWatcher(root string, toStdOutChan chan<- tail.Entry, recursive bool, filterFunc func(string) bool) *rootFolderWatcher {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logger.Error.Fatal(err)
@@ -59,13 +59,14 @@ func (r *rootFolderWatcher) processExistingFileInfo(fileInfo os.FileInfo, filena
 		r.folders[filename] = true
 		r.watcher.Add(filename)
 		logger.Info.Printf("Added folder '%s' on watcher\n", filename)
-		if r.recursive {
-			// Try to add any nested folder that could've created...
-			r.scanAndAddSubfolder(filename)
-		}
+		r.scanAndAddSubfolder(filename)
 	} else {
 		if r.filterFunc(fileInfo.Name()) {
-			process := tail.DoTail(filename, r.toStdOutChan)
+			process, err := tail.DoTail(filename, r.toStdOutChan)
+			if err != nil {
+				logger.Error.Printf("Error trying to tail file '%s': %v", filename, err)
+				return
+			}
 			logger.Info.Printf("Started tailing '%s'\n", fileInfo.Name())
 			if process != nil {
 				r.tailProcesses[filename] = process

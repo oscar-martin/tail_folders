@@ -119,8 +119,9 @@ func TestTailOnSingleFileWithTag(t *testing.T) {
 
 	defer closeFunc()
 
-	if outWriter.String() != "[aTag] [file1.log] temporary file's content\n" {
-		t.Fail()
+	wanted := "[aTag] [file1.log] temporary file's content\n"
+	if outWriter.String() != wanted {
+		t.Errorf("Found %s; wanted %s", outWriter.String(), wanted)
 	}
 }
 
@@ -148,8 +149,9 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 	defer closeFunc1()
 	defer closeFunc2()
 
-	if outWriter.String() != "[file1.log] temporary file's content\n" {
-		t.Fail()
+	wanted := "[file1.log] temporary file's content\n"
+	if outWriter.String() != wanted {
+		t.Errorf("Found %s; wanted %s", outWriter.String(), wanted)
 	}
 }
 
