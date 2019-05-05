@@ -17,6 +17,11 @@ import (
 	"github.com/oscar-martin/tail_folders/watcher"
 )
 
+const (
+	outputJson = "json"
+	outputRaw  = "raw"
+)
+
 var (
 	exitCode   = 0
 	appVersion string
@@ -24,6 +29,8 @@ var (
 )
 
 func main() {
+	// p := profile.Start(profile.MemProfile, profile.ProfilePath("."), profile.NoShutdownHook)
+	// p := profile.Start(profile.CPUProfile, profile.ProfilePath("."), profile.NoShutdownHook)
 	// exit code could depend on the process exit code
 	defer func() {
 		os.Exit(exitCode)
@@ -35,6 +42,7 @@ func main() {
 	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'")
 	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
 	tagPtr := flag.String("tag", "", "Optional tag to use for each line")
+	outputPtr := flag.String("output", "json", "Output type: Either 'raw' or 'json'")
 	versionPtr := flag.Bool("version", false, "Print the version")
 
 	flag.Usage = func() {
@@ -60,6 +68,7 @@ func main() {
 	expressionTypeStr := strings.TrimSpace(*expressionTypePtr)
 	filterStr := strings.TrimSpace(*filterPtr)
 	tagStr := strings.TrimSpace(*tagPtr)
+	outputStr := strings.TrimSpace(*outputPtr)
 
 	// initialize loggers
 	logFile := logger.CreateLogFile()
@@ -70,25 +79,32 @@ func main() {
 	logger.Info.Printf("- recursive: %v", *recursivePtr)
 	logger.Info.Printf("- filter_by: %s", expressionTypeStr)
 	logger.Info.Printf("- filter: %s", filterStr)
-	logger.Info.Printf("- tag: %s", strings.TrimSpace(tagStr))
+	logger.Info.Printf("- tag: %s", tagStr)
+	logger.Info.Printf("- output: %s", outputStr)
 	if flag.NArg() > 0 {
 		logger.Info.Printf("- command: %v", flag.Args())
 	}
 
+	// create output func
+	outputFunc, err := createEntryToStringFunc(outputStr)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// run program
-	outWriter := tail.MakeStdOutWriter()
+	outWriter := tail.MakeStdOutWriter(outputFunc)
 	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args(), outWriter)
+	// p.Stop()
 }
 
 func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string, ow *tail.OutWriter) {
 	// create filename filter
 	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
 	if err != nil {
-		log.Fatalf("Unrecognized filter_by value: %s", expressionTypeStr)
+		log.Fatal(err)
 	}
 
 	// init program
-	stdoutChan := make(chan string)
+	stdoutChan := make(chan tail.Entry)
 	go ow.Start(stdoutChan, tagStr)
 
 	for _, folderPath := range strings.Split(folderPathsStr, ",") {
@@ -111,6 +127,19 @@ func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive 
 		// block here until signal is received
 		<-stop
 	}
+}
+
+func createEntryToStringFunc(outputStr string) (func(tail.Entry, string) (string, error), error) {
+	var outputFunc func(tail.Entry, string) (string, error)
+	switch outputStr {
+	case outputRaw:
+		outputFunc = tail.EntryToRawString
+	case outputJson:
+		outputFunc = tail.EntryToJsonString
+	default:
+		return nil, fmt.Errorf("Unrecognized output value: %s", outputStr)
+	}
+	return outputFunc, nil
 }
 
 func createFilterFunc(expressionTypeStr string, filterStr string) (func(string) bool, error) {

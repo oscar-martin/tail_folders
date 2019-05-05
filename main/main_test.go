@@ -119,8 +119,9 @@ func TestTailOnSingleFileWithTag(t *testing.T) {
 
 	defer closeFunc()
 
-	if outWriter.String() != "[aTag] [file1.log] temporary file's content\n" {
-		t.Fail()
+	wanted := "[aTag] [file1.log] temporary file's content\n"
+	if outWriter.String() != wanted {
+		t.Errorf("Found %s; wanted %s", outWriter.String(), wanted)
 	}
 }
 
@@ -148,8 +149,9 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 	defer closeFunc1()
 	defer closeFunc2()
 
-	if outWriter.String() != "[file1.log] temporary file's content\n" {
-		t.Fail()
+	wanted := "[file1.log] temporary file's content\n"
+	if outWriter.String() != wanted {
+		t.Errorf("Found %s; wanted %s", outWriter.String(), wanted)
 	}
 }
 
@@ -194,7 +196,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	pathInnerFolder := fmt.Sprintf("%s/file1.log", folderName)
 	tmpfileInner, closeFunc2 := createFile(pathInnerFolder)
 
-	sendInterruptToMyselfAfter(200 * time.Millisecond)
+	sendInterruptToMyselfAfter(300 * time.Millisecond)
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
@@ -202,7 +204,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	writeInFile(tmpfileInner, "temporary file's content\n")
 
 	<-exit
@@ -254,7 +256,7 @@ func TestTailOnTwoFiles(t *testing.T) {
 	pathTxt := "./file1.txt"
 	tmpfileTxt, closeFunc2 := createFile(pathTxt)
 
-	sendInterruptToMyselfAfter(200 * time.Millisecond)
+	sendInterruptToMyselfAfter(300 * time.Millisecond)
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
@@ -262,7 +264,7 @@ func TestTailOnTwoFiles(t *testing.T) {
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	writeInFile(tmpfileTxt, "temporary file's content\n")
 
 	<-exit
@@ -270,8 +272,9 @@ func TestTailOnTwoFiles(t *testing.T) {
 	defer closeFunc1()
 	defer closeFunc2()
 
-	if outWriter.String() != "[file1.log] temporary file's content\n[file1.txt] temporary file's content\n" {
-		t.Fail()
+	wanted := "[file1.log] temporary file's content\n[file1.txt] temporary file's content\n"
+	if outWriter.String() != wanted {
+		t.Errorf("Found: %s; wanted: %s", outWriter.String(), wanted)
 	}
 }
 

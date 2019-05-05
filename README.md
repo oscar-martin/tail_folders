@@ -12,7 +12,7 @@ An use case for this could be to scope a program to be used in **OpenFaas**. The
 
 Available parameters:
 
-```
+```shell
   -filter string
     	Filter expression to apply on filenames (default "*.log")
   -filter_by string
@@ -23,13 +23,44 @@ Available parameters:
     	Whether or not recursive folders should be watched (default true)
   -tag string
     	Optional tag to use for each line
+  -output string
+        Output type: Either 'raw' or 'json' (default "json")
 ```
 
 `tail_folders` generates a log file that is found in `working_dir/.logdir/taillog.log`. **Note**: if `tail_folders` starts a new process, the stdout/stderr of that process will be written to `tail_folders`'s log.
 
-### Sample of tailing a given set of folders:
+JSON output follows this data structure:
 
+```go
+// Entry models a line read from a source file
+type Entry struct {
+	// Tag is user-provided setting for different tail_folders processes running
+	// in a single host
+	Tag string `json:"tag,omitempty"`
+	// Hostname is the hostname where tail_folders is running
+	Hostname string `json:"host,omitempty"`
+	// Folders is a list of folder names where the source file is
+	Folders []string `json:"dirs,omitempty"`
+	// Filename is the base filename of the source file
+	Filename string `json:"file,omitempty"`
+	// File is the whole filepath. This field is for internal use only
+	File string `json:"-"`
+	// Message is the actual payload read from the source file
+	Message string `json:"msg,omitempty"`
+	// Timestamp is the time where the log is read
+	Timestamp time.Time `json:"time,omitempty"`
+}
 ```
+
+So an example of a output line can be:
+
+```raw
+{"host":"MacBook-Pro.local","dirs":["tmp"],"file":"hola.log","msg":"aaaa","time":"2019-05-05T20:26:59.596488+02:00"}
+```
+
+## Sample of tailing a given set of folders
+
+```shell
 ./tail_folders -tag=node1 -folders="./aa,./bb"
 ```
 
@@ -39,7 +70,7 @@ Then open two new terminal sessions and execute `while true; do echo "aaaa" >> .
 
 And the stdout of `tail_folders` should be similar to:
 
-```
+```raw
 ...
 [node1] [bb/app_2.log] bbbbbbbb
 [node1] [aa/app_1.log] aaaa
@@ -55,8 +86,8 @@ And the stdout of `tail_folders` should be similar to:
 
 This sample assumes the process will write its log into current folder and the log file will have the .log extension. If it is not the case, please use the parameters to tweak the configuration.
 
-```
-./tail_folders -folders /tmp -recursive=false -- ./app.sh
+```shell
+./tail_folders -folders /tmp -recursive=false -output raw -- ./app.sh
 [/tmp/test.log] aaaa
 [/tmp/test.log] aaaa
 [/tmp/test.log] aaaa
