@@ -206,6 +206,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	writeInFile(tmpfile, "temporary file's content\n")
 	time.Sleep(100 * time.Millisecond)
 	writeInFile(tmpfileInner, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
@@ -267,6 +268,7 @@ func TestTailOnTwoFiles(t *testing.T) {
 	writeInFile(tmpfile, "temporary file's content\n")
 	time.Sleep(100 * time.Millisecond)
 	writeInFile(tmpfileTxt, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
