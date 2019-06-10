@@ -91,6 +91,7 @@ func TestTailOnSingleFile(t *testing.T) {
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
@@ -114,6 +115,7 @@ func TestTailOnSingleFileWithTag(t *testing.T) {
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
@@ -143,6 +145,7 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	writeInFile(tmpfile, "temporary file's content\n")
 	writeInFile(tmpfileTxt, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
@@ -174,6 +177,7 @@ func TestTailOnNonRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	writeInFile(tmpfile, "temporary file's content\n")
 	writeInFile(tmpfileInner, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
@@ -238,6 +242,7 @@ func TestTailOnSingleFileWithRegexFilterExecution(t *testing.T) {
 
 	writeInFile(tmpfile, "temporary file's content\n")
 	writeInFile(tmpfileTxt, "temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
 
 	<-exit
 
