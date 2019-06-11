@@ -13,18 +13,24 @@ A use case for this could be to scope a program to be used in **OpenFaas**. Ther
 Available parameters:
 
 ```shell
+  -discard-files-older-than int
+        Discard tailing files not recently modified (seconds) (default -1)
   -filter string
-    	Filter expression to apply on filenames (default "*.log")
+        Filter expression to apply on filenames (default "*.log")
   -filter_by string
-    	Expression type: Either 'glob' or 'regex'. Defaults to 'glob' (default "glob")
+        Expression type: Either 'glob' or 'regex' (default "glob")
   -folders string
-    	Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED. Defaults to current directory (default ".")
-  -recursive
-    	Whether or not recursive folders should be watched (default true)
-  -tag string
-    	Optional tag to use for each line
+        Paths of the folders to watch for log files, separated by comma (,). IT SHOULD NOT BE NESTED (default ".")
   -output string
         Output type: Either 'raw' or 'json' (default "json")
+  -recursive
+        Whether or not recursive folders should be watched (default true)
+  -tag string
+        Optional tag to use for each line
+  -timeout int
+        Time to wait till stop tailing when no activity is detected in a folder (seconds) (default -1)
+  -version
+        Print the version
 ```
 
 `tail_folders` generates a log file that is found in `working_dir/.logdir/taillog.log`. **Note**: if `tail_folders` starts a new process, the stdout/stderr of that process will be written to `tail_folders`'s log.
@@ -57,6 +63,18 @@ So an example of a output line can be:
 ```raw
 {"host":"MacBook-Pro.local","dirs":["tmp"],"file":"hola.log","msg":"aaaa","time":"2019-05-05T20:26:59.596488+02:00"}
 ```
+
+## Dealing with not recently updated files
+
+`tail_folders` offers settings to control how to deal with old log files that are not expected to receive more log data:
+
+- `timeout`
+
+This setting establishes an activity monitor on each subfolder that is aware of files being written. When there is no write in any file during the `timeout` amount of time, then active `tail` processes are killed. This is interesting when you do not expect that log files to be written any more
+
+- `discard-files-older-than`
+
+During initial scan for files that matches the provided filter, this settings allows to not track files which modification time is older than the `discard-files-older-than` amount
 
 ## Sample of tailing a given set of folders
 

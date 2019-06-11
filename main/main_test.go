@@ -87,7 +87,7 @@ func TestTailOnSingleFile(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter)
+		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -111,7 +111,7 @@ func TestTailOnSingleFileWithTag(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "aTag", false, make([]string, 0), outWriter)
+		run(".", "glob", "file*.log", "aTag", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -140,7 +140,7 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter)
+		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -172,7 +172,7 @@ func TestTailOnNonRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter)
+		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -204,7 +204,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", true, make([]string, 0), outWriter)
+		run(".", "glob", "file*.log", "", true, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -237,7 +237,7 @@ func TestTailOnSingleFileWithRegexFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "regex", "file.\\.[gol]{3}", "", false, make([]string, 0), outWriter)
+		run(".", "regex", "file.\\.[gol]{3}", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -267,7 +267,7 @@ func TestTailOnTwoFiles(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file7.*", "", false, make([]string, 0), outWriter)
+		run(".", "glob", "file7.*", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
