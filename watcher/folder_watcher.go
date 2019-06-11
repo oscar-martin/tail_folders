@@ -49,12 +49,12 @@ func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string, dataChan chan
 	files, err := ioutil.ReadDir(folderPath)
 	if err != nil {
 		return err
-	} else {
-		for _, fileInfo := range files {
-			filename := path.Join(folderPath, fileInfo.Name())
-			r.processExistingFileInfo(folderPath, fileInfo, filename, dataChan)
-		}
 	}
+	for _, fileInfo := range files {
+		filename := path.Join(folderPath, fileInfo.Name())
+		r.processExistingFileInfo(folderPath, fileInfo, filename, dataChan)
+	}
+
 	return nil
 }
 
@@ -151,14 +151,16 @@ func (r *rootFolderWatcher) watch(folder string) error {
 
 	// scan current folders (whether recursive flag is enabled) and files
 	dataChan := make(chan tail.Entry)
+	activityChan := make(chan struct{})
+
 	err = r.scanAndAddSubfolder(folder, dataChan)
 	if err != nil {
-		logger.Error.Fatalf("Error trying to scan folder path '%s': %v. Skipping...", folder, err)
-		return nil
+		close(dataChan)
+		close(activityChan)
+		return err
 	}
 
 	exitChan := make(chan struct{})
-	activityChan := make(chan struct{})
 	r.exitChans[folder] = exitChan
 	r.watchers[folder] = watcher
 	watcher.Add(folder)
@@ -166,14 +168,17 @@ func (r *rootFolderWatcher) watch(folder string) error {
 
 	trackActivity := r.timeout > 0
 
+	// this receives data coming from any file whithin this folder
 	go func() {
 		for {
 			select {
-			case entry := <-dataChan:
-				r.toStdOutChan <- entry
-				if trackActivity {
-					// notify new activity
-					activityChan <- struct{}{}
+			case entry, ok := <-dataChan:
+				if ok {
+					r.toStdOutChan <- entry
+					if trackActivity {
+						// notify new activity
+						activityChan <- struct{}{}
+					}
 				}
 			case <-exitChan:
 				return
@@ -181,7 +186,7 @@ func (r *rootFolderWatcher) watch(folder string) error {
 		}
 	}()
 
-	// now, run the watcher
+	// run watcher processor
 	go func() {
 		for {
 			select {
@@ -215,17 +220,20 @@ func (r *rootFolderWatcher) watch(folder string) error {
 
 	if trackActivity {
 		timer := time.NewTimer(time.Duration(r.timeout) * time.Second)
+		// this takes care of tracking activity
 		go func() {
 			for {
 				select {
 				case <-timer.C:
 					logger.Info.Printf("Inactivity timeout set off for folder '%s'\n", folder)
 					r.unwatch(folder)
-				case <-activityChan:
-					if !timer.Stop() {
-						<-timer.C
+				case _, ok := <-activityChan:
+					if ok {
+						if !timer.Stop() {
+							<-timer.C
+						}
+						timer.Reset(time.Duration(r.timeout) * time.Second)
 					}
-					timer.Reset(time.Duration(r.timeout) * time.Second)
 				case <-exitChan:
 					return
 				}
