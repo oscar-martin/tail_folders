@@ -2,7 +2,6 @@ package watcher
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"runtime"
@@ -46,21 +45,26 @@ func MakeRootFolderWatcher(root string, toStdOutChan chan<- tail.Entry, recursiv
 	}
 }
 
-func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string, dataChan chan<- tail.Entry) {
+func (r *rootFolderWatcher) scanAndAddSubfolder(folderPath string, dataChan chan<- tail.Entry) error {
 	files, err := ioutil.ReadDir(folderPath)
 	if err != nil {
-		log.Fatalf("Error trying to scan folder path '%s': %v", folderPath, err)
+		return err
 	} else {
 		for _, fileInfo := range files {
 			filename := path.Join(folderPath, fileInfo.Name())
 			r.processExistingFileInfo(folderPath, fileInfo, filename, dataChan)
 		}
 	}
+	return nil
 }
 
 func (r *rootFolderWatcher) processExistingFileInfo(folder string, fileInfo os.FileInfo, filename string, dataChan chan<- tail.Entry) {
 	if fileInfo.IsDir() && !isHidden(filename) && r.recursive {
-		r.watch(filename)
+		err := r.watch(filename)
+		if err != nil {
+			logger.Error.Fatalf("Error trying to watch folder path '%s': %v. Skipping...", folder, err)
+			return
+		}
 	} else {
 		if r.filterFunc(fileInfo.Name()) {
 			modTime := fileInfo.ModTime()
@@ -113,7 +117,7 @@ func (r *rootFolderWatcher) Close() {
 	}
 }
 
-func (r *rootFolderWatcher) unwatch(folder string) error {
+func (r *rootFolderWatcher) unwatch(folder string) {
 	// only unwatch subfolders... root folder must remain watching
 	if r.root != folder {
 		if watcher, ok := r.watchers[folder]; ok {
@@ -137,7 +141,6 @@ func (r *rootFolderWatcher) unwatch(folder string) error {
 			}
 		}
 	}
-	return nil
 }
 
 func (r *rootFolderWatcher) watch(folder string) error {
@@ -148,7 +151,11 @@ func (r *rootFolderWatcher) watch(folder string) error {
 
 	// scan current folders (whether recursive flag is enabled) and files
 	dataChan := make(chan tail.Entry)
-	r.scanAndAddSubfolder(folder, dataChan)
+	err = r.scanAndAddSubfolder(folder, dataChan)
+	if err != nil {
+		logger.Error.Fatalf("Error trying to scan folder path '%s': %v. Skipping...", folder, err)
+		return nil
+	}
 
 	exitChan := make(chan struct{})
 	activityChan := make(chan struct{})
