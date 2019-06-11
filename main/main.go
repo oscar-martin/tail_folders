@@ -43,6 +43,8 @@ func main() {
 	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
 	tagPtr := flag.String("tag", "", "Optional tag to use for each line")
 	outputPtr := flag.String("output", "json", "Output type: Either 'raw' or 'json'")
+	timeoutPtr := flag.Int("timeout", -1, "Time to wait till stop tailing when no activity is detected in a folder (seconds)")
+	oldFilesPtr := flag.Int("discard-files-older-than", -1, "Discard tailing files not recently modified (seconds)")
 	versionPtr := flag.Bool("version", false, "Print the version")
 
 	flag.Usage = func() {
@@ -69,6 +71,8 @@ func main() {
 	filterStr := strings.TrimSpace(*filterPtr)
 	tagStr := strings.TrimSpace(*tagPtr)
 	outputStr := strings.TrimSpace(*outputPtr)
+	timeout := *timeoutPtr
+	oldFiles := *oldFilesPtr
 
 	// initialize loggers
 	logFile := logger.CreateLogFile()
@@ -81,6 +85,8 @@ func main() {
 	logger.Info.Printf("- filter: %s", filterStr)
 	logger.Info.Printf("- tag: %s", tagStr)
 	logger.Info.Printf("- output: %s", outputStr)
+	logger.Info.Printf("- timeout: %d", timeout)
+	logger.Info.Printf("- discard-files-older-than: %d", oldFiles)
 	if flag.NArg() > 0 {
 		logger.Info.Printf("- command: %v", flag.Args())
 	}
@@ -92,11 +98,11 @@ func main() {
 	}
 	// run program
 	outWriter := tail.MakeStdOutWriter(outputFunc)
-	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args(), outWriter)
+	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args(), outWriter, timeout, oldFiles)
 	// p.Stop()
 }
 
-func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string, ow *tail.OutWriter) {
+func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string, ow *tail.OutWriter, timeout, oldFiles int) {
 	// create filename filter
 	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
 	if err != nil {
@@ -108,9 +114,12 @@ func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive 
 	go ow.Start(stdoutChan, tagStr)
 
 	for _, folderPath := range strings.Split(folderPathsStr, ",") {
-		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc)
+		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc, timeout, oldFiles)
 		defer rootFolderWatcher.Close()
-		rootFolderWatcher.Watch()
+		err := rootFolderWatcher.Watch()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// if num arguments is greater than one, means that it is a command that should be started
