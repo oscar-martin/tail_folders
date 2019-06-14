@@ -4,7 +4,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/oscar-martin/tail_folders/logger"
@@ -62,7 +64,7 @@ func (r *rootFolderWatcher) processExistingFileInfo(folder string, fileInfo os.F
 	if fileInfo.IsDir() && !isHidden(filename) && r.recursive {
 		err := r.watch(filename)
 		if err != nil {
-			logger.Error.Fatalf("Error trying to watch folder path '%s': %v. Skipping...", folder, err)
+			logger.Error.Printf("Error trying to watch folder path '%s': %v. Skipping...", folder, err)
 			return
 		}
 	} else {
@@ -250,9 +252,10 @@ func (r *rootFolderWatcher) Watch() error {
 }
 
 func isHidden(filename string) bool {
+	basename := filepath.Base(filename)
 	if runtime.GOOS != "windows" {
 		// unix/linux file or directory that starts with . is hidden
-		if filename[0:1] == "." {
+		if strings.HasPrefix(basename, ".") {
 			return true
 		}
 	}
