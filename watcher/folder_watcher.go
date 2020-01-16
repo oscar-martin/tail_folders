@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oscar-martin/tail_folders/logger"
@@ -16,6 +17,8 @@ import (
 )
 
 type rootFolderWatcher struct {
+	// mutex to protect shared resources from different goroutines
+	mutex sync.Mutex
 	// root folder
 	root string
 	// exitChans contains the channel that exits processing goroutines for watcher events
@@ -83,16 +86,20 @@ func (r *rootFolderWatcher) processExistingFileInfo(folder string, fileInfo os.F
 			}
 			logger.Info.Printf("Started tailing '%s'\n", filename)
 			if process != nil {
+				r.mutex.Lock()
 				if _, ok := r.tailProcesses[folder]; !ok {
 					r.tailProcesses[folder] = make(map[string]*os.Process)
 				}
 				r.tailProcesses[folder][filename] = process
+				r.mutex.Unlock()
 			}
 		}
 	}
 }
 
 func (r *rootFolderWatcher) processDeletedFile(folder string, name string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if processes, ok := r.tailProcesses[folder]; ok {
 		if process, ok := processes[name]; ok {
 			err := process.Kill()
@@ -108,6 +115,8 @@ func (r *rootFolderWatcher) processDeletedFile(folder string, name string) {
 }
 
 func (r *rootFolderWatcher) Close() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	for folder, watcher := range r.watchers {
 		logger.Info.Printf("Watcher on folder '%s' closed\n", folder)
 		watcher.Close()
@@ -120,6 +129,8 @@ func (r *rootFolderWatcher) Close() {
 }
 
 func (r *rootFolderWatcher) unwatch(folder string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	// only unwatch subfolders... root folder must remain watching
 	if r.root != folder {
 		if watcher, ok := r.watchers[folder]; ok {
@@ -163,8 +174,10 @@ func (r *rootFolderWatcher) watch(folder string) error {
 	}
 
 	exitChan := make(chan struct{})
+	r.mutex.Lock()
 	r.exitChans[folder] = exitChan
 	r.watchers[folder] = watcher
+	r.mutex.Unlock()
 	watcher.Add(folder)
 	logger.Info.Printf("Added watcher for '%s'\n", folder)
 
