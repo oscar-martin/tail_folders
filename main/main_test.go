@@ -18,7 +18,7 @@ func sendInterruptToMyselfAfter(d time.Duration) {
 			panic(err)
 		}
 
-		process.Signal(syscall.SIGINT)
+		_ = process.Signal(syscall.SIGINT)
 	})
 }
 
@@ -30,14 +30,6 @@ func runMain(mainFunc func()) <-chan struct{} {
 	}()
 	time.Sleep(100 * time.Millisecond)
 	return syncChan
-}
-
-func isError(err error) bool {
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	return (err != nil)
 }
 
 func createFile(path string) (*os.File, func()) {
@@ -87,7 +79,7 @@ func TestTailOnSingleFile(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file*.log", "no-filter", "", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -111,7 +103,7 @@ func TestTailOnSingleFileWithTag(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "aTag", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file*.log", "no-filter", "", "aTag", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -140,7 +132,7 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file*.log", "no-filter", "", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -161,7 +153,7 @@ func TestTailOnSingleFileWithGlobFilterExecution(t *testing.T) {
 // Write into two log files, one of them in a nested folder. The output should only see what is
 // written into the log file from the non-nested folder. Filter based on glob pattern
 func TestTailOnNonRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
-	os.MkdirAll("./tail_folder_test", os.ModePerm)
+	_ = os.MkdirAll("./tail_folder_test", os.ModePerm)
 	path := "./file4.log"
 	tmpfile, closeFunc1 := createFile(path)
 
@@ -172,7 +164,7 @@ func TestTailOnNonRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file*.log", "no-filter", "", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -193,7 +185,7 @@ func TestTailOnNonRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 // written into the log file from the both folders. Filter based on glob pattern
 func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 	folderName := "./tail_folder_test"
-	os.MkdirAll(folderName, os.ModePerm)
+	_ = os.MkdirAll(folderName, os.ModePerm)
 	path := "./file5.log"
 	tmpfile, closeFunc1 := createFile(path)
 
@@ -204,7 +196,7 @@ func TestTailOnRecursiveSingleFileWithGlobFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file*.log", "", true, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file*.log", "no-filter", "", "", true, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -237,7 +229,7 @@ func TestTailOnSingleFileWithRegexFilterExecution(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "regex", "file.\\.[gol]{3}", "", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "regex", "file.\\.[gol]{3}", "no-filter", "", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -267,7 +259,7 @@ func TestTailOnTwoFiles(t *testing.T) {
 
 	outWriter := tail.MakeOutStringWriter()
 	exit := runMain(func() {
-		run(".", "glob", "file7.*", "", false, make([]string, 0), outWriter, -1, -1)
+		run(".", "glob", "file7.*", "no-filter", "", "", false, make([]string, 0), outWriter, -1, -1)
 	})
 
 	writeInFile(tmpfile, "temporary file's content\n")
@@ -286,11 +278,84 @@ func TestTailOnTwoFiles(t *testing.T) {
 	}
 }
 
-//func ExampleCommandToScope() {
-//	run("/tmp", "glob", "hola.log", "", false, []string{"../app.sh"})
-//
-//	// Output:
-//	// [/tmp/hola.log] aaaa
-//	// [/tmp/hola.log] aaaa
-//	// [/tmp/hola.log] aaaa
-//}
+// Write into a log file with include content filtering. The output should see what is written
+func TestTailOnSingleFileWithIncludeContentFilter(t *testing.T) {
+	path := "./file1.log"
+	tmpfile, closeFunc := createFile(path)
+
+	sendInterruptToMyselfAfter(200 * time.Millisecond)
+
+	outWriter := tail.MakeOutStringWriter()
+	exit := runMain(func() {
+		run(".", "glob", "file*.log", "include", "INFO", "", false, make([]string, 0), outWriter, -1, -1)
+	})
+
+	writeInFile(tmpfile, "[WARN] temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	writeInFile(tmpfile, "[ERROR] temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
+
+	<-exit
+
+	defer closeFunc()
+
+	if outWriter.String() != "[file1.log] [INFO] temporary file's content\n[file1.log] [INFO] temporary file's content\n" {
+		t.Fail()
+	}
+}
+
+// Write into a log file with exclude content filtering. The output should see what is written
+func TestTailOnSingleFileWithExcludeContentFilter(t *testing.T) {
+	path := "./file1.log"
+	tmpfile, closeFunc := createFile(path)
+
+	sendInterruptToMyselfAfter(200 * time.Millisecond)
+
+	outWriter := tail.MakeOutStringWriter()
+	exit := runMain(func() {
+		run(".", "glob", "file*.log", "exclude", "INFO", "", false, make([]string, 0), outWriter, -1, -1)
+	})
+
+	writeInFile(tmpfile, "[WARN] temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	writeInFile(tmpfile, "[ERROR] temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
+
+	<-exit
+
+	defer closeFunc()
+
+	if outWriter.String() != "[file1.log] [WARN] temporary file's content\n[file1.log] [ERROR] temporary file's content\n" {
+		t.Fail()
+	}
+}
+
+// Write into a log file with regex content filtering. The output should see what is written
+func TestTailOnSingleFileWithRegexContentFilter(t *testing.T) {
+	path := "./file1.log"
+	tmpfile, closeFunc := createFile(path)
+
+	sendInterruptToMyselfAfter(200 * time.Millisecond)
+
+	outWriter := tail.MakeOutStringWriter()
+	exit := runMain(func() {
+		run(".", "glob", "file*.log", "regex", "^\\[.+\\]", "", false, make([]string, 0), outWriter, -1, -1)
+	})
+
+	writeInFile(tmpfile, "[WARN] temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	writeInFile(tmpfile, "[ERROR] temporary file's content\n")
+	writeInFile(tmpfile, "THIS WILL NOT APPEAR temporary file's content\n")
+	writeInFile(tmpfile, "[INFO] temporary file's content\n")
+	time.Sleep(100 * time.Millisecond)
+
+	<-exit
+
+	defer closeFunc()
+
+	if outWriter.String() != "[file1.log] [WARN] temporary file's content\n[file1.log] [INFO] temporary file's content\n[file1.log] [ERROR] temporary file's content\n[file1.log] [INFO] temporary file's content\n" {
+		t.Fail()
+	}
+}

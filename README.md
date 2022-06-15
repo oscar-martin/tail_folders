@@ -13,6 +13,10 @@ A use case for this could be to scope a program to be used in **OpenFaas**. Ther
 Available parameters:
 
 ```shell
+  -content_filter string
+        Filter expression to apply on tailed lines
+  -content_filter_by string
+        Content filter type: Either 'include', 'exclude', 'regex' or 'no-filter' (default "no-filter")
   -discard-files-older-than int
         Discard tailing files not recently modified (seconds) (default -1)
   -filter string
@@ -40,21 +44,21 @@ JSON output follows this data structure:
 ```go
 // Entry models a line read from a source file
 type Entry struct {
-	// Tag is user-provided setting for different tail_folders processes running
-	// in a single host
-	Tag string `json:"tag,omitempty"`
-	// Hostname is the hostname where tail_folders is running
-	Hostname string `json:"host,omitempty"`
-	// Folders is a list of folder names where the source file is
-	Folders []string `json:"dirs,omitempty"`
-	// Filename is the base filename of the source file
-	Filename string `json:"file,omitempty"`
-	// File is the whole filepath. This field is for internal use only
-	File string `json:"-"`
-	// Message is the actual payload read from the source file
-	Message string `json:"msg,omitempty"`
-	// Timestamp is the time where the log is read
-	Timestamp time.Time `json:"time,omitempty"`
+      // Tag is user-provided setting for different tail_folders processes running
+      // in a single host
+      Tag string `json:"tag,omitempty"`
+      // Hostname is the hostname where tail_folders is running
+      Hostname string `json:"host,omitempty"`
+      // Folders is a list of folder names where the source file is
+      Folders []string `json:"dirs,omitempty"`
+      // Filename is the base filename of the source file
+      Filename string `json:"file,omitempty"`
+      // File is the whole filepath. This field is for internal use only
+      File string `json:"-"`
+      // Message is the actual payload read from the source file
+      Message string `json:"msg,omitempty"`
+      // Timestamp is the time where the log is read
+      Timestamp time.Time `json:"time,omitempty"`
 }
 ```
 

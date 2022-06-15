@@ -28,25 +28,27 @@ type rootFolderWatcher struct {
 	// watchers contains the watcher instance per subfolder
 	watchers map[string]*fsnotify.Watcher
 	// toStsdOutChan is the channel to use for outputing the tail information from files
-	toStdOutChan chan<- tail.Entry
-	recursive    bool
-	filterFunc   func(string) bool
-	timeout      int
-	oldFiles     int
+	toStdOutChan      chan<- tail.Entry
+	recursive         bool
+	filterFunc        func(string) bool
+	contentFilterFunc func(string) bool
+	timeout           int
+	oldFiles          int
 }
 
 // MakeRootFolderWatcher lets you create a rootFolderWatcher instance
-func MakeRootFolderWatcher(root string, toStdOutChan chan<- tail.Entry, recursive bool, filterFunc func(string) bool, timeout, oldFiles int) *rootFolderWatcher {
+func MakeRootFolderWatcher(root string, toStdOutChan chan<- tail.Entry, recursive bool, filterFunc func(string) bool, contentFilterFunc func(string) bool, timeout, oldFiles int) *rootFolderWatcher {
 	return &rootFolderWatcher{
-		root:          root,
-		exitChans:     make(map[string]chan<- struct{}),
-		tailProcesses: make(map[string]map[string]*os.Process),
-		watchers:      make(map[string]*fsnotify.Watcher),
-		toStdOutChan:  toStdOutChan,
-		recursive:     recursive,
-		filterFunc:    filterFunc,
-		timeout:       timeout,
-		oldFiles:      oldFiles,
+		root:              root,
+		exitChans:         make(map[string]chan<- struct{}),
+		tailProcesses:     make(map[string]map[string]*os.Process),
+		watchers:          make(map[string]*fsnotify.Watcher),
+		toStdOutChan:      toStdOutChan,
+		recursive:         recursive,
+		filterFunc:        filterFunc,
+		contentFilterFunc: contentFilterFunc,
+		timeout:           timeout,
+		oldFiles:          oldFiles,
 	}
 }
 
@@ -79,7 +81,7 @@ func (r *rootFolderWatcher) processExistingFileInfo(folder string, fileInfo os.F
 				return
 			}
 
-			process, err := tail.DoTail(filename, dataChan)
+			process, err := tail.DoTail(filename, dataChan, r.contentFilterFunc)
 			if err != nil {
 				logger.Error.Printf("Error trying to tail file '%s': %v", filename, err)
 				return
@@ -178,12 +180,12 @@ func (r *rootFolderWatcher) watch(folder string) error {
 	r.exitChans[folder] = exitChan
 	r.watchers[folder] = watcher
 	r.mutex.Unlock()
-	watcher.Add(folder)
+	_ = watcher.Add(folder)
 	logger.Info.Printf("Added watcher for '%s'\n", folder)
 
 	trackActivity := r.timeout > 0
 
-	// this receives data coming from any file whithin this folder
+	// this receives data coming from any file within this folder
 	go func() {
 		for {
 			select {
