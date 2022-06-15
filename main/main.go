@@ -41,6 +41,8 @@ func main() {
 	recursivePtr := flag.Bool("recursive", true, "Whether or not recursive folders should be watched")
 	expressionTypePtr := flag.String("filter_by", "glob", "Expression type: Either 'glob' or 'regex'")
 	filterPtr := flag.String("filter", "*.log", "Filter expression to apply on filenames")
+	contentFilterTypePtr := flag.String("content_filter_by", "no-filter", "Content filter type: Either 'include', 'exclude', 'regex' or 'no-filter'")
+	contentFilterPtr := flag.String("content_filter", "", "Filter expression to apply on tailed lines")
 	tagPtr := flag.String("tag", "", "Optional tag to use for each line")
 	outputPtr := flag.String("output", "json", "Output type: Either 'raw' or 'json'")
 	timeoutPtr := flag.Int("timeout", -1, "Time to wait till stop tailing when no activity is detected in a folder (seconds)")
@@ -69,6 +71,8 @@ func main() {
 	folderPathsStr := strings.TrimSpace(*folderPathsPtr)
 	expressionTypeStr := strings.TrimSpace(*expressionTypePtr)
 	filterStr := strings.TrimSpace(*filterPtr)
+	contentFilterTypeStr := strings.TrimSpace(*contentFilterTypePtr)
+	contentFilterStr := strings.TrimSpace(*contentFilterPtr)
 	tagStr := strings.TrimSpace(*tagPtr)
 	outputStr := strings.TrimSpace(*outputPtr)
 	timeout := *timeoutPtr
@@ -83,6 +87,8 @@ func main() {
 	logger.Info.Printf("- recursive: %v", *recursivePtr)
 	logger.Info.Printf("- filter_by: %s", expressionTypeStr)
 	logger.Info.Printf("- filter: %s", filterStr)
+	logger.Info.Printf("- content_filter_by: %s", contentFilterTypeStr)
+	logger.Info.Printf("- content_filter: %s", contentFilterStr)
 	logger.Info.Printf("- tag: %s", tagStr)
 	logger.Info.Printf("- output: %s", outputStr)
 	logger.Info.Printf("- timeout: %d", timeout)
@@ -98,13 +104,30 @@ func main() {
 	}
 	// run program
 	outWriter := tail.MakeStdOutWriter(outputFunc)
-	run(folderPathsStr, expressionTypeStr, filterStr, tagStr, *recursivePtr, flag.Args(), outWriter, timeout, oldFiles)
+	run(folderPathsStr, expressionTypeStr, filterStr, contentFilterTypeStr, contentFilterStr, tagStr, *recursivePtr, flag.Args(), outWriter, timeout, oldFiles)
 	// p.Stop()
 }
 
-func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive bool, commandAndArguments []string, ow *tail.OutWriter, timeout, oldFiles int) {
+func run(
+	folderPathsStr,
+	expressionTypeStr,
+	filterStr,
+	contentFilterTypeStr,
+	contentFilterStr,
+	tagStr string,
+	recursive bool,
+	commandAndArguments []string,
+	ow *tail.OutWriter,
+	timeout,
+	oldFiles int) {
 	// create filename filter
 	filterFunc, err := createFilterFunc(expressionTypeStr, filterStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// create content filter
+	contentFilterFunc, err := createContentFilterFunc(contentFilterTypeStr, contentFilterStr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,7 +137,7 @@ func run(folderPathsStr, expressionTypeStr, filterStr, tagStr string, recursive 
 	go ow.Start(stdoutChan, tagStr)
 
 	for _, folderPath := range strings.Split(folderPathsStr, ",") {
-		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc, timeout, oldFiles)
+		rootFolderWatcher := watcher.MakeRootFolderWatcher(folderPath, stdoutChan, recursive, filterFunc, contentFilterFunc, timeout, oldFiles)
 		defer rootFolderWatcher.Close()
 		err := rootFolderWatcher.Watch()
 		if err != nil {
@@ -164,6 +187,23 @@ func createFilterFunc(expressionTypeStr string, filterStr string) (func(string) 
 	return filterFunc, nil
 }
 
+func createContentFilterFunc(filterTypeStr string, filterStr string) (func(string) bool, error) {
+	var filterFunc func(string) bool
+	switch filterTypeStr {
+	case "exclude":
+		filterFunc = contentFilterNotContain(filterStr)
+	case "include":
+		filterFunc = contentFilterContain(filterStr)
+	case "regex":
+		filterFunc = contentFilterByRegex(filterStr)
+	case "no-filter":
+		filterFunc = func(string) bool { return true }
+	default:
+		return nil, fmt.Errorf("Unrecognized content_filter_by value: %s", filterTypeStr)
+	}
+	return filterFunc, nil
+}
+
 func filterByGlob(globPattern string) func(string) bool {
 	_, err := filepath.Match(globPattern, "text.txt")
 	if err != nil {
@@ -180,5 +220,24 @@ func filterByRegex(regexStr string) func(string) bool {
 	regex := regexp.MustCompile(regexStr)
 	return func(filename string) bool {
 		return regex.MatchString(filename)
+	}
+}
+
+func contentFilterContain(filter string) func(string) bool {
+	return func(msg string) bool {
+		return strings.Contains(msg, filter)
+	}
+}
+
+func contentFilterNotContain(filter string) func(string) bool {
+	return func(msg string) bool {
+		return !strings.Contains(msg, filter)
+	}
+}
+
+func contentFilterByRegex(regexStr string) func(string) bool {
+	regex := regexp.MustCompile(regexStr)
+	return func(msg string) bool {
+		return regex.MatchString(msg)
 	}
 }

@@ -15,10 +15,12 @@ const (
 	Tag = "aTag"
 )
 
+var acceptF = func(string) bool { return true }
+
 func Example() {
 	chanOut := make(chan Entry)
 
-	writer, _ := lineProcessorWriter(Tag, chanOut)
+	writer, _ := lineProcessorWriter(Tag, chanOut, acceptF)
 
 	go func() {
 		writer.Write([]byte(One))
@@ -54,7 +56,7 @@ func TestDoTail(t *testing.T) {
 	defer os.Remove(tmpfile.Name()) // clean up
 
 	chanOut := make(chan Entry)
-	tailProcess, _ := DoTail(tmpfile.Name(), chanOut)
+	tailProcess, _ := DoTail(tmpfile.Name(), chanOut, acceptF)
 
 	time.Sleep(100 * time.Millisecond)
 	if _, err := tmpfile.Write(content); err != nil {

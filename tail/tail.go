@@ -12,6 +12,8 @@ import (
 	"github.com/oscar-martin/tail_folders/logger"
 )
 
+type acceptFunc func(string) bool
+
 // Entry models a line read from a source file
 type Entry struct {
 	// Tag is user-provided setting for different tail_folders processes running
@@ -31,7 +33,7 @@ type Entry struct {
 	Timestamp time.Time `json:"time,omitempty"`
 }
 
-func lineProcessorWriter(fpath string, toEntryChan chan<- Entry) (io.Writer, error) {
+func lineProcessorWriter(fpath string, toEntryChan chan<- Entry, acceptF acceptFunc) (io.Writer, error) {
 	pipeReader, pipeWriter := io.Pipe()
 
 	scanner := bufio.NewScanner(pipeReader)
@@ -54,24 +56,27 @@ func lineProcessorWriter(fpath string, toEntryChan chan<- Entry) (io.Writer, err
 
 	go func(host string, folders []string, file string) {
 		for scanner.Scan() {
-			now := time.Now()
-			entry := Entry{
-				Folders:   folders,
-				Message:   string(scanner.Bytes()),
-				Timestamp: now,
-				File:      fpath,
-				Filename:  file,
-				Hostname:  hostname,
+			message := string(scanner.Bytes())
+			if acceptF(message) {
+				now := time.Now()
+				entry := Entry{
+					Folders:   folders,
+					Message:   message,
+					Timestamp: now,
+					File:      fpath,
+					Filename:  file,
+					Hostname:  hostname,
+				}
+				toEntryChan <- entry
 			}
-			toEntryChan <- entry
 		}
 	}(hostname, folders, file)
 
 	return pipeWriter, nil
 }
 
-func DoTail(filename string, toEntryChan chan<- Entry) (*os.Process, error) {
-	prefixWriter, err := lineProcessorWriter(filename, toEntryChan)
+func DoTail(filename string, toEntryChan chan<- Entry, acceptF acceptFunc) (*os.Process, error) {
+	prefixWriter, err := lineProcessorWriter(filename, toEntryChan, acceptF)
 	if err != nil {
 		return nil, err
 	}
